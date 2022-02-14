@@ -1,0 +1,83 @@
+CREATE TABLE programs(   program_id integer NOT NULL,  name text NOT NULL,  duration numeric(3) NOT NULL,  start_date date NOT NULL,  end_date date NOT NULL,  amount_applications numeric(2) NOT NULL,  amount_students numeric(2) NOT NULL,  curator text,  PRIMARY KEY ( program_id )); CREATE TABLE students(   student_id integer NOT NULL,  name text NOT NULL,  birthday date NOT NULL,  education text NOT NULL,   first_application_date date NOT NULL,  source_information text,  PRIMARY KEY ( student_id )); CREATE TABLE trainers(   trainer_id integer NOT NULL,  contant_data jsonb,  name text NOT NULL,  education text NOT NULL,   start_cooperation_date date,  PRIMARY KEY ( trainer_id )); CREATE TABLE certificates(   certificate_id integer NOT NULL,  program_id integer NOT NULL,  student_id integer NOT NULL,  date date NOT NULL,  PRIMARY KEY ( certificate_id ),  FOREIGN KEY ( student_id )  REFERENCES students ( student_id )  ON DELETE CASCADE  ON UPDATE CASCADE,  FOREIGN KEY ( program_id )  REFERENCES programs ( program_id )  ON DELETE CASCADE  ON UPDATE CASCADE); CREATE TABLE curators(   curator_id integer NOT NULL,  program_id integer NOT NULL,  name text NOT NULL,  education text NOT NULL,  contant_data jsonb,  PRIMARY KEY ( curator_id ),  FOREIGN KEY ( program_id )  REFERENCES programs ( program_id )  ON DELETE CASCADE  ON UPDATE CASCADE); CREATE TABLE schedule(   class_id integer NOT NULL,  program_id integer NOT NULL,  trainer_id integer NOT NULL,  date date NOT NULL,  topic text NOT NULL,  amount_students integer DEFAULT 0,    PRIMARY KEY ( class_id ),  FOREIGN KEY ( program_id )  REFERENCES programs ( program_id )  ON DELETE CASCADE  ON UPDATE CASCADE,  FOREIGN KEY ( trainer_id )  REFERENCES trainers ( trainer_id  )  ON DELETE CASCADE  ON UPDATE CASCADE); CREATE TABLE contracts(   contract_id integer NOT NULL,  program_id integer NOT NULL,  student_id integer NOT NULL,  is_signature boolean DEFAULT FALSE,    PRIMARY KEY ( contract_id ),  FOREIGN KEY ( program_id )  REFERENCES programs (program_id)  ON DELETE CASCADE  ON UPDATE CASCADE,  FOREIGN KEY ( student_id )  REFERENCES students ( student_id )  ON DELETE CASCADE  ON UPDATE CASCADE); CREATE TABLE attendence(   student_id integer NOT NULL,  program_id integer NOT NULL,  class_id integer NOT NULL,  visited boolean DEFAULT FALSE,    FOREIGN KEY ( program_id )  REFERENCES programs ( program_id )  ON DELETE CASCADE  ON UPDATE CASCADE,  FOREIGN KEY ( student_id )  REFERENCES students ( student_id )  ON DELETE CASCADE  ON UPDATE CASCADE,  FOREIGN KEY ( class_id )  REFERENCES schedule ( class_id )  ON DELETE CASCADE  ON UPDATE CASCADE); CREATE TABLE link_trainers_programs(  program_id integer NOT NULL,  trainer_id integer NOT NULL, PRIMARY KEY ( program_id,  trainer_id),  FOREIGN KEY ( program_id )  REFERENCES programs ( program_id )  ON DELETE CASCADE  ON UPDATE CASCADE,  FOREIGN KEY ( trainer_id )  REFERENCES trainers ( trainer_id  )  ON DELETE CASCADE  ON UPDATE CASCADE); CREATE TABLE link_students_programs(  program_id integer NOT NULL,  student_id integer NOT NULL, PRIMARY KEY ( program_id,  student_id),  FOREIGN KEY ( program_id )  REFERENCES programs ( program_id )  ON DELETE CASCADE  ON UPDATE CASCADE,  FOREIGN KEY ( student_id )  REFERENCES students ( student_id  )  ON DELETE CASCADE  ON UPDATE CASCADE); 
+
+-- Добавим триггер 1
+
+CREATE OR REPLACE FUNCTION update_programs() RETURNS trigger AS
+$$
+DECLARE 
+delta numeric(2); 
+p_id integer; 
+BEGIN 
+IF TG_OP = 'INSERT' THEN 
+delta = 1;
+p_id = NEW.program_id; 
+  ELSIF ( TG_OP = 'DELETE' ) THEN
+    delta = -1;
+p_id = OLD.program_id; 
+END IF; 
+
+UPDATE programs p SET amount_students = amount_students + delta
+WHERE program_id = p_id;
+
+ RETURN NULL;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS update_programs ON link_students_programs; 
+CREATE TRIGGER update_programs 
+AFTER INSERT OR DELETE ON link_students_programs FOR EACH ROW EXECUTE PROCEDURE update_programs();
+-- Добавим 2 триггер
+
+CREATE OR REPLACE FUNCTION update_schedule() RETURNS trigger AS
+$$
+DECLARE 
+delta integer; 
+c_id integer; 
+BEGIN 
+IF TG_OP = 'INSERT' and NEW.visited = TRUE THEN 
+delta = 1;
+c_id = NEW.class_id;
+END IF; 
+
+UPDATE schedule s SET amount_students = amount_students + delta
+WHERE class_id = c_id;
+
+ RETURN NULL;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS update_schedule ON attendence; 
+CREATE TRIGGER update_schedule
+AFTER INSERT ON attendence FOR EACH ROW EXECUTE PROCEDURE update_schedule();
+INSERT INTO programs ( program_id, name, duration, start_date, end_date, amount_applications, amount_students, curator )  VALUES ( 1, 'Первая ступепь обучения Психодраме', 270, '2022-01-21', '2022-08-28', 20, 0, 'Карина Джалилова' ),( 2, 'Инстументы психодрамы в проффесиональной практике', 270, '2021-09-24', '2022-06-24', 30, 0, 'Маргарита Васильева' ),( 3, 'Основы психодрамы для коучей', 180, '2022-01-14', '2022-6-17', 20, 0, 'Маргарита Васильева' );INSERT INTO students ( student_id, name, birthday, education, first_application_date, source_information)  VALUES ( 1, 'Ольга Злобина', '2016-09-12' , 'ВШЭ Семейная психотерапия', '2021-09-15' , 'Социальные сети'),( 2, 'Мария Зуева', '1974-09-12', 'МГУ Социальная психология', '2021-09-15',  'Психотерапевт'),( 3, 'Роман Иванов', '1983-10-01' , 'ВШЭ Семейная психотерапия', '2021-09-15',  'Коллеги'),( 4, 'Наталья Иванова', '1988-01-12', 'МГУ Социальная психология', '2021-09-15', 'Сайт'),( 5, 'Ирина Ильина', '1990-02-13' , 'ВШЭ Семейная психотерапия', '2021-09-15',  'Коллеги'),( 6, 'Ирина Щербакова', '1985-09-01', 'МГУ Социальная психология', '2016-09-12',  'Сайт'),( 7, 'Софья Коганович', '1980-08-02' , 'ВШЭ Семейная психотерапия', '2021-09-15',  'Коллеги'),( 8, 'Оксана Калашникова', '1979-12-31', 'МГУ Социальная психология', '2011-11-23',  'Коллеги'),( 9, 'Сергей Канин', '1997-05-05', 'ВШЭ Семейная психотерапия', '2011-11-23',  'Коллеги'),( 10, 'Антон Капитонов', '1978-06-07', 'ВШЭ Семейная психотерапия', '2011-11-23',  'Сайт'),( 11, 'Евгения Карабанова', '2000-01-01', 'МГУ Социальная психология', '2011-11-23',  'Коллеги'),( 12, 'Юлия Карапай', '1995-07-28', 'ВШЭ Семейная психотерапия', '2021-05-21',  'Коллеги'),( 13, 'Игорь Карпинский', '1992-03-24', 'ВШЭ Семейная психотерапия', '2021-05-21',  'Коллеги'),( 14, 'Наталья Кашуба', '1987-03-25', 'РГГУ Психология личности', '2021-05-21',  'Коллеги'),( 15, 'Елена Кашич', '1996-04-24', 'МГППУ Клиническая психология', '2021-05-17',  'Сайт'),( 16, 'Наталья Кашуба', '1979-08-28', 'МГППУ Клиническая психология', '2021-05-17',  'Сайт'),( 17, 'Дарья Квартальная', '1991-07-07', 'РГГУ Психология личности', '2021-05-17',  'Сайт'),( 18, 'Сергей Кидяев', '1993-03-03', 'РГГУ Психология личности', '2021-03-15',  'Сайт'),( 19, 'Дмитрий Килин', '1994-04-22', 'МГУ Клиническая психология', '2021-03-15',  'Сайт'),( 20, 'Андрей Киселев', '1980-08-12', 'РГГУ Психология личности', '2021-03-16',  'Сайт'),( 21, 'Юлия Климовская', '1965-10-11', 'МГУ Клиническая психология', '2021-03-21',  'Сайт'),( 22, 'Марина Клочкова', '1969-01-23', 'МГУ Социальная психология', '2021-03-25',  'Сайт'),( 23, 'Екатерина Кибис', '1968-03-21', 'МГУ Клиническая психология', '2021-03-17',  'Сайт'),( 24, 'Екатерина Кибис', '1972-07-23', 'МГУ Клиническая психология', '2021-04-13',  'Сайт');INSERT INTO trainers (trainer_id, contant_data, name, education, start_cooperation_date)  VALUES ( 1, '{ "телефон": 89030080781}'::jsonb,  'Маргарита Васильева', 'МГУ Социальная психология',   '2015-01-10'),( 2, '{ "телефон": 89030280780}'::jsonb,  'Анна Иванова', 'РГГУ Психология личности',   '2016-09-12'),( 3, '{ "телефон": 89030456780}'::jsonb,  'Иван Пак', 'МГППУ Клиническая психология',   '2017-10-01'),( 4, '{ "телефон": 89030008781}'::jsonb,  'Лев Абрамов', 'РГГУ Психология личности',   '2010-01-06'),( 5, '{ "телефон": 89030589780}'::jsonb,  'Евгений Гутман', 'МГУ Клиническая психология',   '2019-09-01');INSERT INTO curators (curator_id, program_id, name, education, contant_data)  VALUES ( 1, 1,  'Кариана Джалилова', 'МГППУ Социальная психология', '{ "телефон": 89032280780}'::jsonb),( 2, 2,  'Елена Кузнецова', 'МГППУ Социальная психология', '{ "телефон": 89036280780}'::jsonb),( 3, 3,  'Валерия Краснова', 'МГУ Клиническая психология', '{ "телефон": 89036280780}'::jsonb);INSERT INTO schedule (class_id, program_id, trainer_id, date, topic)  VALUES ( 1, 1, 1,  '2022-01-21', 'Открытие группы'),( 2, 1, 1,  '2022-01-22', 'Знакомство с психодрамой'),( 3, 1, 1,  '2022-01-23', 'Дублирование, смена ролей, зеркало'),( 4, 1, 2,  '2022-02-18', 'Построение сцены'),( 5, 1, 2,  '2022-02-19', 'Построение сцены, комната дества'),( 6, 1, 2,  '2022-02-20', 'Введение в роль, разогрев на роль'),( 7, 2, 3,  '2021-09-24', 'Знакомство с группой'),( 8, 2, 4,  '2021-10-01', 'Дублирование'),( 9, 2, 3,  '2021-10-08', 'Дублирование'),( 10, 2, 5,  '2021-10-15', 'Введение в роль'),( 11, 2, 5,  '2021-10-22', 'Построение сцены'),( 12, 2, 3,  '2021-10-29', 'Обмен ролями. Зеркало'),( 13, 3, 3,  '2022-01-14', 'Знакомство группы, основы психодрамы'),( 14, 2, 3,  '2022-01-15', 'Базовые техники психодрамы'),( 15, 2, 3,  '2022-02-14', 'Метафорические карты в коучинге'),( 16, 2, 3,  '2022-02-15', 'Карьерный коучинг');INSERT INTO contracts (contract_id, program_id, student_id,is_signature)VALUES (1, 2, 11, TRUE),(2, 2, 12, TRUE),(3, 2, 13, TRUE),(4, 2, 14, TRUE),(5, 2, 15, FALSE),(6, 2, 16, FALSE);INSERT INTO attendence ( student_id, program_id, class_id, visited)VALUES (11, 2, 7, TRUE),(11, 2, 8, TRUE),(11, 2, 9, FALSE),(11, 2, 10, TRUE),(11, 2, 11, TRUE),(11, 2, 12, FALSE),(12, 2, 7, TRUE),(12, 2, 8, FALSE),(12, 2, 9, TRUE),(12, 2, 10, TRUE),(12, 2, 11, FALSE),(12, 2, 12, TRUE),(13, 2, 7, TRUE),(13, 2, 8, FALSE),(13, 2, 9, TRUE),(13, 2, 10, TRUE),(13, 2, 11, TRUE),(13, 2, 12, TRUE),(14, 2, 7, TRUE),(14, 2, 8, FALSE),(14, 2, 9, TRUE),(14, 2, 10, TRUE),(14, 2, 11, TRUE),(14, 2, 12, TRUE),(15, 2, 7, TRUE),(15, 2, 8, FALSE),(15, 2, 9, TRUE),(15, 2, 10, TRUE),(15, 2, 11, TRUE),(15, 2, 12, TRUE);INSERT INTO link_students_programs (program_id, student_id)  VALUES ( 1, 1),( 1, 2),( 1, 3),( 1, 4),( 1, 5),( 1, 6),( 1, 7),( 1, 8),( 1, 9),( 1, 10),( 2, 11),( 2, 12),( 2, 13),( 2, 14),( 2, 15),( 3, 13),( 3, 14),( 3, 15),( 3, 16),( 3, 17),( 3, 18),( 3, 19),( 3, 20),( 3, 21),( 3, 22),( 3, 23),( 3, 24);INSERT INTO link_trainers_programs (program_id, trainer_id)  VALUES (1, 1),(1, 2),(2, 3),(2, 4),(2, 5),(3, 3);
+
+-- Создадим функцию 1
+
+DROP FUNCTION count_trainers ( p_id integer ); CREATE FUNCTION count_trainers( p_id integer)
+RETURNS bigint AS $$
+SELECT  count(*)
+FROM trainers t
+JOIN link_trainers_programs link ON t.trainer_id = link.trainer_id
+WHERE link.program_id = p_id; $$ LANGUAGE sql; 
+
+-- Создадим функцию 2
+DROP FUNCTION count_gaps ( date_gap date); CREATE FUNCTION count_gaps( date_gap date)
+RETURNS bigint AS $$
+SELECT  count(*)
+FROM attendence a
+JOIN schedule s ON s.class_id = a.class_id
+WHERE visited is FALSE and s.date = date_gap; $$ LANGUAGE sql; 
+
+-- Запрос 1
+SELECT s.nameFROM students sJOIN contracts c ON s.student_id = c.student_idWHERE is_signature IS FALSE;-- Запрос 2
+SELECT t.name, count(s.trainer_id)FROM trainers tJOIN schedule s  ON s.trainer_id = t.trainer_idGROUP BY t.trainer_idORDER BY 2 DESCLIMIT 1; 
+
+-- Запрос 3
+SELECT name, duration, max(duration) OVER() as max_duration, amount_students, max(amount_students) OVER() as max_amount_students
+FROM programs;
+
+-- Запрос 4 
+SELECT t.nameFROM schedule sJOIN trainers tON s.trainer_id = t.trainer_idWHERE date in (select start_date from programs);
+
+-- Запрос 5 
+WITH stud_1 as(SELECT  s.name, source_informationFROM students sJOIN link_students_programs link ON s.student_id = link.student_idJOIN programs p ON link.program_id = p.program_idWHERE p.program_id = 1)SELECT source_information, count(*)FROM stud_1GROUP BY source_informationORDER BY 2 DESC; 
